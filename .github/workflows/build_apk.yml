@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -24,57 +24,39 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'
           channel: 'stable'
 
-      - name: Build Clean App
+      - name: Build Project
         run: |
-          # 1. حفظ كود main.dart الاصلي جانباً
-          mkdir -p /tmp/my_code
-          cp lib/main.dart /tmp/my_code/main.dart
+          # 1. حفظ كود main.dart الأصلي
+          mkdir -p /tmp/my_src
+          cp lib/main.dart /tmp/my_src/main.dart
 
-          # 2. إنشاء مشروع Flutter جديد كلياً وبإعدادات Android سليمة
+          # 2. إنشاء هيكل مشروع أندرويد نظيف باسم My-Compass
           cd ..
-          rm -rf app_build
-          flutter create --platforms=android --org com.example.compass app_build
-          cd app_build
+          rm -rf my_compass_app
+          flutter create --platforms=android --org com.example.mycompass my_compass_app
+          cd my_compass_app
 
-          # 3. إعداد pubspec.yaml بالمكتبات المطلوبة
-          cat << 'EOF' > pubspec.yaml
-          name: app_build
-          description: A compass app pointing to target coordinates.
-          publish_to: 'none'
-          version: 1.0.0+1
-          environment:
-            sdk: '>=3.0.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            flutter_compass: ^0.8.0
-            geolocator: ^10.1.0
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^2.0.0
-          flutter:
-            uses-material-design: true
-          EOF
+          # 3. إرجاع كود main.dart
+          cp /tmp/my_src/main.dart lib/main.dart
 
-          # 4. إرجاع كود الصفحة الرئيسية وإضافة أذونات الجي بي إس
-          cp /tmp/my_code/main.dart lib/main.dart
+          # 4. إضافة المكتبات المعتمدة مباشرة
+          flutter pub add flutter_compass geolocator
+
+          # 5. إضافة أذونات الموقع في AndroidManifest
           sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-          # 5. التجميع والتصدير
-          flutter pub get
+          # 6. بناء ملف ה-APK
           flutter build apk --release --no-tree-shake-icons
 
-          # 6. نقل ملف الـ APK النهائي لمسار المخرجات
-          mkdir -p $GITHUB_WORKSPACE/output_apk
-          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/output_apk/
+          # 7. نقل الملف إلى المسار النهائي
+          mkdir -p $GITHUB_WORKSPACE/output
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/output/My-Compass.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: My-Compass-Release
-          path: output_apk/app-release.apk
+          path: output/My-Compass.apk
           
