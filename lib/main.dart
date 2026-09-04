@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'services/sos_service.dart';
 import 'services/waypoint_service.dart';
+import 'screens/offline_map_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,7 +113,7 @@ class _CompassScreenState extends State<CompassScreen> {
     if (_currentPosition == null) return;
     setState(() {
       _savedWaypoint = Waypoint(
-        name: "موقع الخيمة/السيارة",
+        name: "نقطة المرجعية المحددة",
         latitude: _currentPosition!.latitude,
         longitude: _currentPosition!.longitude,
       );
@@ -167,8 +168,23 @@ class _CompassScreenState extends State<CompassScreen> {
         title: Text('My-Compass', style: TextStyle(color: activeColor, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
+            icon: Icon(Icons.map, color: activeColor),
+            tooltip: 'الخريطة الطبوغرافية',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OfflineMapScreen(
+                    currentPosition: _currentPosition,
+                    isRedMode: _isRedMode,
+                  ),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: Icon(Icons.bookmark_add, color: activeColor),
-            tooltip: 'حفظ الموقع الحالي',
+            tooltip: 'حفظ الموقع',
             onPressed: _saveCurrentLocationAsWaypoint,
           ),
           IconButton(
@@ -204,7 +220,6 @@ class _CompassScreenState extends State<CompassScreen> {
                     Stack(
                       alignment: Alignment.center,
                       children: [
-                        // إبرة البوصلة الأساسية
                         Transform.rotate(
                           angle: ((_heading ?? 0) * (math.pi / 180) * -1),
                           child: Icon(
@@ -213,7 +228,6 @@ class _CompassScreenState extends State<CompassScreen> {
                             color: activeColor,
                           ),
                         ),
-                        // مؤشر النقطة المرجعية (سهم أصفر)
                         if (_savedWaypoint != null)
                           Transform.rotate(
                             angle: (((_heading ?? 0) - _bearingToWaypoint) * (math.pi / 180) * -1),
@@ -230,7 +244,6 @@ class _CompassScreenState extends State<CompassScreen> {
               ),
             ),
 
-            // شريط النقطة المرجعية المعتمد
             if (_savedWaypoint != null)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -255,7 +268,6 @@ class _CompassScreenState extends State<CompassScreen> {
                 ),
               ),
 
-            // شريط الإحداثيات
             Container(
               padding: const EdgeInsets.all(16),
               margin: const EdgeInsets.all(16),
