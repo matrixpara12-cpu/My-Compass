@@ -27,24 +27,50 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
-      - name: Create Flutter Project Skeleton
+      - name: Create Complete Clean App
         run: |
-          mkdir temp_app
-          cd temp_app
-          flutter create --platforms=android --org com.example.compass my_compass
-          cp -r my_compass/android ../
-          cd ..
-          rm -rf temp_app
+          rm -rf my_compass_app
+          flutter create --platforms=android --org com.example.compass my_compass_app
+          cd my_compass_app
+          
+          # إدخال المكتبات في pubspec.yaml
+          cat << 'EOF' > pubspec.yaml
+          name: my_compass_app
+          description: A compass app pointing to target coordinates.
+          publish_to: 'none'
+          version: 1.0.0+1
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+            flutter_compass: ^0.8.0
+            geolocator: ^10.1.0
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^2.0.0
+          flutter:
+            uses-material-design: true
+          EOF
 
-      - name: Install Dependencies
-        run: flutter pub get
+          # إضافة أذونات الجي بي إس والموقع
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Build Release APK
-        run: flutter build apk --release --no-tree-shake-icons
+          # نقل الكود البرمجي الرئيسي
+          cp ../lib/main.dart lib/main.dart
+
+          # جلب المكتبات والبناء
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+          
+          # نقل ملف الـ APK لمسار الرفع
+          mkdir -p ../output_apk
+          cp build/app/outputs/flutter-apk/app-release.apk ../output_apk/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: My-Compass-Release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: output_apk/app-release.apk
           
