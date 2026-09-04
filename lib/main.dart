@@ -5,6 +5,9 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:vibration/vibration.dart';
 import 'dart:math' as math;
 
+import 'services/sos_service.dart';
+import 'services/waypoint_service.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyCompassApp());
@@ -38,6 +41,13 @@ class _CompassScreenState extends State<CompassScreen> {
   double _magStrength = 0;
   bool _hasVibrator = false;
 
+  final SosService _sosService = SosService();
+  bool _isSosActive = false;
+
+  Waypoint? _savedWaypoint;
+  double _distanceToWaypoint = 0;
+  double _bearingToWaypoint = 0;
+
   @override
   void initState() {
     super.initState();
@@ -59,17 +69,17 @@ class _CompassScreenState extends State<CompassScreen> {
         _heading = event.heading;
       });
 
-      // اهتزاز عند محاذاة الشمال التام (0°)
       if (_heading != null && (_heading!.abs() < 1 || _heading!.abs() > 359)) {
         if (_hasVibrator) {
           Vibration.vibrate(duration: 40);
         }
       }
+
+      _updateWaypointData();
     });
   }
 
   void _initSensors() {
-    // حساب شدة المجال المغناطيسي (Microtesla - µT)
     magnetometerEventStream().listen((MagnetometerEvent event) {
       if (!mounted) return;
       double strength = math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
@@ -89,17 +99,66 @@ class _CompassScreenState extends State<CompassScreen> {
       if (permission == LocationPermission.denied) return;
     }
 
-    Position pos = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+    Geolocator.getPositionStream().listen((Position pos) {
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = pos;
+      });
+      _updateWaypointData();
+    });
+  }
+
+  void _saveCurrentLocationAsWaypoint() {
+    if (_currentPosition == null) return;
+    setState(() {
+      _savedWaypoint = Waypoint(
+        name: "موقع الخيمة/السيارة",
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم حفظ النقطة المرجعية بنجاح!')),
     );
-    setState(() => _currentPosition = pos);
+  }
+
+  void _updateWaypointData() {
+    if (_savedWaypoint != null && _currentPosition != null) {
+      double dist = WaypointService.calculateDistance(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+        _savedWaypoint!.latitude,
+        _savedWaypoint!.longitude,
+      );
+
+      double bear = WaypointService.calculateBearing(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+        _savedWaypoint!.latitude,
+        _savedWaypoint!.longitude,
+      );
+
+      setState(() {
+        _distanceToWaypoint = dist;
+        _bearingToWaypoint = bear;
+      });
+    }
+  }
+
+  void _toggleSos() async {
+    if (_isSosActive) {
+      await _sosService.stopSos();
+      setState(() => _isSosActive = false);
+    } else {
+      setState(() => _isSosActive = true);
+      _sosService.startSos();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final Color activeColor = _isRedMode ? Colors.red : const Color(0xFF00FFC8);
     final Color bgColor = Colors.black;
-    bool isMagInterference = _magStrength > 65 || (_magStrength < 25 && _magStrength > 0);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -107,6 +166,16 @@ class _CompassScreenState extends State<CompassScreen> {
         backgroundColor: bgColor,
         title: Text('My-Compass', style: TextStyle(color: activeColor, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: Icon(Icons.bookmark_add, color: activeColor),
+            tooltip: 'حفظ الموقع الحالي',
+            onPressed: _saveCurrentLocationAsWaypoint,
+          ),
+          IconButton(
+            icon: Icon(_isSosActive ? Icons.flash_on : Icons.flash_off, color: _isSosActive ? Colors.red : activeColor),
+            tooltip: 'إشارة SOS للطوارئ',
+            onPressed: _toggleSos,
+          ),
           IconButton(
             icon: Icon(Icons.nights_stay, color: activeColor),
             tooltip: 'الوضع الأحمر الليلي',
@@ -117,32 +186,11 @@ class _CompassScreenState extends State<CompassScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 10),
-            
-            // تنبيه التداخل المغناطيسي
-            if (isMagInterference)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                color: Colors.red.withOpacity(0.2),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.warning_amber, color: Colors.red, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'تداخل مغناطيسي (${_magStrength.toStringAsFixed(1)} µT)',
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-
             Expanded(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // درجة الاتجاه
                     Text(
                       '${_heading?.round() ?? 0}°',
                       style: TextStyle(
@@ -153,10 +201,10 @@ class _CompassScreenState extends State<CompassScreen> {
                     ),
                     const SizedBox(height: 30),
 
-                    // القرص الموجه
                     Stack(
                       alignment: Alignment.center,
                       children: [
+                        // إبرة البوصلة الأساسية
                         Transform.rotate(
                           angle: ((_heading ?? 0) * (math.pi / 180) * -1),
                           child: Icon(
@@ -165,14 +213,16 @@ class _CompassScreenState extends State<CompassScreen> {
                             color: activeColor,
                           ),
                         ),
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: activeColor,
-                            shape: BoxShape.circle,
+                        // مؤشر النقطة المرجعية (سهم أصفر)
+                        if (_savedWaypoint != null)
+                          Transform.rotate(
+                            angle: (((_heading ?? 0) - _bearingToWaypoint) * (math.pi / 180) * -1),
+                            child: const Icon(
+                              Icons.location_searching,
+                              size: 140,
+                              color: Colors.amber,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ],
@@ -180,7 +230,32 @@ class _CompassScreenState extends State<CompassScreen> {
               ),
             ),
 
-            // شريط الإحداثيات والمعلومات الميدانية
+            // شريط النقطة المرجعية المعتمد
+            if (_savedWaypoint != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _savedWaypoint!.name,
+                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'المسافة: ${_distanceToWaypoint.toStringAsFixed(0)} متر',
+                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+
+            // شريط الإحداثيات
             Container(
               padding: const EdgeInsets.all(16),
               margin: const EdgeInsets.all(16),
