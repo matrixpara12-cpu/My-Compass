@@ -1,22 +1,39 @@
-dependencies:
-  flutter:
-    sdk: flutter
+name: Build Flutter APK
 
-  # البوصلة والحساسات
-  flutter_compass: ^0.8.0
-  sensors_plus: ^6.0.0
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-  # الموقع والإحداثيات
-  geolocator: ^12.0.0
-  latlong2: ^0.9.1
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-  # الخرائط بدون إنترنت
-  flutter_map: ^7.0.0
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-  # AR والكاميرا والفلاش
-  camera: ^0.11.0
-  torch_light: ^1.0.0
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-  # اهتزاز الجهاز
-  vibration: ^2.0.0
-  
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          channel: 'stable'
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: My-Compass-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          
