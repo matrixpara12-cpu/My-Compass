@@ -42,7 +42,7 @@ class _CompassScreenState extends State<CompassScreen> {
   Position? _currentPosition;
   double? _targetLat = 34.643361;
   double? _targetLng = 3.173417;
-  
+
   double _heading = 0;
   double _distanceKm = 0;
   double _bearing = 0;
@@ -92,7 +92,6 @@ class _CompassScreenState extends State<CompassScreen> {
     });
   }
 
-  // تحويل النص المركب (DMS أو Decimal) إلى خط عرض وخط طول
   void _parseAndSetCoordinates(String input) {
     try {
       final parsed = _parseCoordinates(input);
@@ -119,7 +118,6 @@ class _CompassScreenState extends State<CompassScreen> {
     String cleanText = text.trim();
     if (cleanText.isEmpty) return null;
 
-    // حالة 1: صيغة DMS مثل 34°38'36.1"N 3°10'24.3"E
     final dmsRegex = RegExp(
       r'(\d+)°\s*(\d+)[\x27\u2019\u2032]\s*([\d.]+)"?\s*([NSns])\s*[, ]*\s*(\d+)°\s*(\d+)[\x27\u2019\u2032]\s*([\d.]+)"?\s*([EWew])',
     );
@@ -145,7 +143,6 @@ class _CompassScreenState extends State<CompassScreen> {
       return [lat, lng];
     }
 
-    // حالة 2: صيغة عشرية مثل 34.643361, 3.173417
     final decRegex = RegExp(r'^\s*([+-]?\d+\.?\d*)\s*[, ]\s*([+-]?\d+\.?\d*)\s*$');
     final decMatch = decRegex.firstMatch(cleanText);
     if (decMatch != null) {
@@ -188,7 +185,6 @@ class _CompassScreenState extends State<CompassScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // زاوية السهم بالنسبة لاتجاه الجهاز الحالي
     double arrowRotation = ((_bearing - _heading) + 360) % 360;
 
     return Scaffold(
@@ -202,8 +198,6 @@ class _CompassScreenState extends State<CompassScreen> {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            
-            // عرض المسافة
             Text(
               _distanceKm.toStringAsFixed(2),
               style: const TextStyle(
@@ -227,34 +221,39 @@ class _CompassScreenState extends State<CompassScreen> {
                 child: Text(_errorMessage, style: const TextStyle(color: Colors.redAccent)),
               ),
 
-            // السهم المتجه نحو الهدف
+            // البوصلة مع قرص التدرجات والأرقام
             Expanded(
               child: Center(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 260,
-                      height: 260,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white10, width: 2),
+                child: SizedBox(
+                  width: 280,
+                  height: 280,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // قرص الدرجات يدور مع اتجاه الهاتف
+                      Transform.rotate(
+                        angle: (-_heading * math.pi / 180),
+                        child: CustomPaint(
+                          size: const Size(280, 280),
+                          painter: CompassDialPainter(),
+                        ),
                       ),
-                    ),
-                    Transform.rotate(
-                      angle: (arrowRotation * math.pi / 180),
-                      child: Icon(
-                        Icons.navigation,
-                        size: 140,
-                        color: const Color(0xFF4DB6AC),
+                      // سهم الاتجاه نحو الهدف
+                      Transform.rotate(
+                        angle: (arrowRotation * math.pi / 180),
+                        child: const Icon(
+                          Icons.navigation,
+                          size: 110,
+                          color: Color(0xFF4DB6AC),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
 
-            // منطقة إدخال الإحداثيات بحقل واحد
+            // إدخال الإحداثيات
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -265,7 +264,7 @@ class _CompassScreenState extends State<CompassScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'تحديد إحداثيات الهدف (نص واحد)',
+                    'تحديد إحداثيات الهدف',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
@@ -320,4 +319,88 @@ class _CompassScreenState extends State<CompassScreen> {
       ),
     );
   }
+}
+
+// رسم تدرجات وأرقام قرص البوصلة
+class CompassDialPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double radius = size.width / 2;
+    final Offset center = Offset(radius, radius);
+
+    final Paint circlePaint = Paint()
+      ..color = Colors.white12
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final Paint tickPaint = Paint()
+      ..color = Colors.white54
+      ..strokeWidth = 1.5;
+
+    final Paint mainTickPaint = Paint()
+      ..color = const Color(0xFF4DB6AC)
+      ..strokeWidth = 3.0;
+
+    canvas.drawCircle(center, radius - 4, circlePaint);
+
+    for (int i = 0; i < 360; i += 5) {
+      final double angle = i * math.pi / 180;
+      final bool isMain = (i % 30 == 0);
+      final double tickLength = isMain ? 12.0 : 6.0;
+
+      final Offset start = Offset(
+        center.dx + (radius - 10) * math.sin(angle),
+        center.dy - (radius - 10) * math.cos(angle),
+      );
+      final Offset end = Offset(
+        center.dx + (radius - 10 - tickLength) * math.sin(angle),
+        center.dy - (radius - 10 - tickLength) * math.cos(angle),
+      );
+
+      canvas.drawLine(start, end, isMain ? mainTickPaint : tickPaint);
+
+      if (i % 30 == 0) {
+        String label = '$i';
+        Color color = Colors.white70;
+
+        if (i == 0) {
+          label = 'N';
+          color = Colors.redAccent;
+        } else if (i == 90) {
+          label = 'E';
+        } else if (i == 180) {
+          label = 'S';
+        } else if (i == 270) {
+          label = 'W';
+        }
+
+        final TextSpan span = TextSpan(
+          text: label,
+          style: TextStyle(
+            color: color,
+            fontSize: isMain && (i % 90 == 0) ? 14 : 10,
+            fontWeight: FontWeight.bold,
+          ),
+        );
+
+        final TextPainter tp = TextPainter(
+          text: span,
+          textAlign: TextAlign.center,
+          textDirection: TextDirection.ltr,
+        );
+
+        tp.layout();
+
+        final Offset textOffset = Offset(
+          center.dx + (radius - 32) * math.sin(angle) - (tp.width / 2),
+          center.dy - (radius - 32) * math.cos(angle) - (tp.height / 2),
+        );
+
+        tp.paint(canvas, textOffset);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
