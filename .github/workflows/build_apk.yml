@@ -1,62 +1,22 @@
-name: Build Android APK
+dependencies:
+  flutter:
+    sdk: flutter
 
-on:
-  push:
-    branches:
-      - main
-      - master
-  workflow_dispatch:
+  # البوصلة والحساسات
+  flutter_compass: ^0.8.0
+  sensors_plus: ^6.0.0
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+  # الموقع والإحداثيات
+  geolocator: ^12.0.0
+  latlong2: ^0.9.1
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+  # الخرائط بدون إنترنت
+  flutter_map: ^7.0.0
 
-      - name: Set up Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+  # AR والكاميرا والفلاش
+  camera: ^0.11.0
+  torch_light: ^1.0.0
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Build Project
-        run: |
-          # 1. حفظ كود main.dart الأصلي
-          mkdir -p /tmp/my_src
-          cp lib/main.dart /tmp/my_src/main.dart
-
-          # 2. إنشاء هيكل مشروع أندرويد نظيف باسم My-Compass
-          cd ..
-          rm -rf my_compass_app
-          flutter create --platforms=android --org com.example.mycompass my_compass_app
-          cd my_compass_app
-
-          # 3. إرجاع كود main.dart
-          cp /tmp/my_src/main.dart lib/main.dart
-
-          # 4. إضافة المكتبات المعتمدة مباشرة
-          flutter pub add flutter_compass geolocator
-
-          # 5. إضافة أذونات الموقع في AndroidManifest
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-
-          # 6. بناء ملف ה-APK
-          flutter build apk --release --no-tree-shake-icons
-
-          # 7. نقل الملف إلى المسار النهائي
-          mkdir -p $GITHUB_WORKSPACE/output
-          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/output/My-Compass.apk
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: My-Compass-Release
-          path: output/My-Compass.apk
-          
+  # اهتزاز الجهاز
+  vibration: ^2.0.0
+  
